@@ -3,6 +3,8 @@
 #include <string>
 #include <sstream>
 #include <algorithm>
+#include <fstream>
+#include <cstdlib>
 #include "Simplex.h"
 
 using namespace std;
@@ -64,6 +66,34 @@ int main() {
     
     Simplex solver(objFunc, constraints, isMinimization);
     solver.solve();
+
+    if (numVars == 2 && !solver.getIsUnbounded() && !solver.getIsInfeasible()) {
+        cout << "\nExporting 2D data for visualization..." << endl;
+        ofstream outFile("data.json");
+        outFile << "{\n";
+        outFile << "  \"isMinimization\": " << (isMinimization ? "true" : "false") << ",\n";
+        
+        outFile << "  \"objective\": [" << objFunc[0] << ", " << objFunc[1] << "],\n";
+        
+        outFile << "  \"constraints\": [\n";
+        for (size_t i = 0; i < constraints.size(); ++i) {
+            outFile << "    {\"coeffs\": [" << constraints[i].coeffs[0] << ", " << constraints[i].coeffs[1] << "], ";
+            outFile << "\"op\": \"" << constraints[i].op << "\", ";
+            outFile << "\"rhs\": " << constraints[i].rhs << "}";
+            if (i < constraints.size() - 1) outFile << ",";
+            outFile << "\n";
+        }
+        outFile << "  ],\n";
+
+        vector<double> optVars = solver.getOptimalVariables();
+        outFile << "  \"optimal_point\": [" << optVars[0] << ", " << optVars[1] << "],\n";
+        outFile << "  \"optimal_value\": " << solver.getOptimalObjective() << "\n";
+        outFile << "}\n";
+        outFile.close();
+
+        cout << "Launching Python visualizer..." << endl;
+        system("python plot_simplex.py data.json");
+    }
 
     return 0;
 }

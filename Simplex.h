@@ -23,9 +23,18 @@ private:
     void pivot(int pivotRow, int pivotCol);
     void printResults();
 
+    std::vector<double> optimalVariables;
+    double optimalObjective;
+    bool isUnbounded;
+    bool isInfeasible;
+
 public:
     Simplex(std::vector<double> obj, std::vector<Constraint> constraints, bool isMin);
     void solve();
+    std::vector<double> getOptimalVariables() { return optimalVariables; }
+    double getOptimalObjective() { return optimalObjective; }
+    bool getIsUnbounded() { return isUnbounded; }
+    bool getIsInfeasible() { return isInfeasible; }
 };
 
 #endif // SIMPLEX_H

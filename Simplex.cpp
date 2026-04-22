@@ -8,6 +8,10 @@ Simplex::Simplex(vector<double> obj, vector<Constraint> constraints, bool isMin)
     isMinimization = isMin;
     M = 1000000.0;
     numVars = obj.size();
+    isUnbounded = false;
+    isInfeasible = false;
+    optimalObjective = 0.0;
+    optimalVariables.assign(numVars, 0.0);
 
     int numVars = obj.size();
     int numConstraints = constraints.size();
@@ -83,6 +87,7 @@ void Simplex::solve() {
         
         if (pivotRow == -1) {
             cout << "\nProblem is Unbounded! No finite solution exists." << endl;
+            isUnbounded = true;
             return;
         }
 
@@ -144,9 +149,11 @@ void Simplex::printResults() {
     if (isMinimization) optimalValue *= -1;
 
     if (abs(optimalValue) > M / 10) {
+        isInfeasible = true;
         cout << "WARNING: Problem may be INFEASIBLE. Artificial variables could not be eliminated." << endl;
     }
 
+    optimalObjective = optimalValue;
     cout << "Optimal Objective Value (Z): " << optimalValue << "\n\n";
     cout << "--- Optimal Variable Values ---" << endl;
 
@@ -165,8 +172,10 @@ void Simplex::printResults() {
         }
 
         if (oneCount == 1 && zeroCount == (rows - 2)) {
+            optimalVariables[j] = tableau[oneRowIndex][cols - 1];
             cout << "x" << (j + 1) << " = " << tableau[oneRowIndex][cols - 1] << endl;
         } else {
+            optimalVariables[j] = 0.0;
             cout << "x" << (j + 1) << " = 0" << endl;
         }
     }
