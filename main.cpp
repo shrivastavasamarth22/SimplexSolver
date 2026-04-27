@@ -5,61 +5,91 @@
 #include <algorithm>
 #include <fstream>
 #include <cstdlib>
+#include <regex>
 #include "Simplex.h"
 
 using namespace std;
 
 int main() {
-    string optType;
-    int numVars, numConstraints;
+    cout << "--- Simplex Solver ---" << endl;
+    cout << "Enter the objective function (e.g., 'max 3x1 - 4x2 + 5x3' or 'min x1 + 2x2'):\n> ";
+    string objLine;
+    getline(cin, objLine);
 
-    cout << "Do you want to 'maximise' or 'minimise'? ";
-    cin >> optType;
-    
-    transform(optType.begin(), optType.end(), optType.begin(), ::tolower);
-    bool isMinimization = (optType == "minimise" || optType == "minimize" || optType == "min");
-
-    cout << "Enter the number of variables (e.g., 2 for x1, x2): ";
-    cin >> numVars;
-
-    cout << "Enter the number of constraints: ";
-    cin >> numConstraints;
-    cin.ignore();
-
-    vector<double> objFunc(numVars);
-    cout << "\nType the coefficients of the initial problem separated by spaces." << endl;
-    cout << "(Example: for 3x1 + 5x2, type '3 5'): ";
-    string line;
-    getline(cin, line);
-    stringstream ssObj(line);
-    for (int i = 0; i < numVars; i++) {
-        ssObj >> objFunc[i];
+    bool isMinimization = false;
+    string lowerObj = objLine;
+    transform(lowerObj.begin(), lowerObj.end(), lowerObj.begin(), ::tolower);
+    if (lowerObj.find("min") != string::npos) {
+        isMinimization = true;
     }
 
-    vector<Constraint> constraints;
-    cout << "\nFor each constraint, you will be asked for the coefficients, the operator, and the RHS." << endl;
+    int maxVarIdx = 0;
     
-    for (int i = 0; i < numConstraints; i++) {
-        Constraint c;
-        c.coeffs.resize(numVars);
-        
-        cout << "\n--- Constraint " << i + 1 << " ---" << endl;
-        cout << "Coefficients (separated by spaces): ";
-        getline(cin, line);
-        stringstream ssConst(line);
-        for (int j = 0; j < numVars; j++) {
-            ssConst >> c.coeffs[j];
+    auto parseExpression = [&](const string& expr, vector<double>& coeffs) {
+        regex termRegex(R"(([+-]?\s*\d*\.?\d*)\s*[xX](\d+))");
+        sregex_iterator words_begin(expr.begin(), expr.end(), termRegex);
+        sregex_iterator words_end;
+
+        for (sregex_iterator i = words_begin; i != words_end; ++i) {
+            smatch match = *i;
+            string coeffStr = match[1].str();
+            int varIdx = stoi(match[2].str()) - 1; // 1-based to 0-based
+            
+            coeffStr.erase(remove_if(coeffStr.begin(), coeffStr.end(), ::isspace), coeffStr.end());
+            
+            double coeff = 1.0;
+            if (coeffStr == "-" || coeffStr == "+-") coeff = -1.0;
+            else if (coeffStr == "+" || coeffStr == "") coeff = 1.0;
+            else coeff = stod(coeffStr);
+            
+            maxVarIdx = max(maxVarIdx, varIdx + 1);
+            if (varIdx >= coeffs.size()) coeffs.resize(varIdx + 1, 0.0);
+            coeffs[varIdx] = coeff;
         }
+    };
 
-        cout << "Operator (<=, <, >=, >, =): ";
-        getline(cin, c.op);
+    vector<double> objFunc;
+    parseExpression(objLine, objFunc);
 
-        cout << "Right-Hand Side (RHS): ";
-        string rhsStr;
-        getline(cin, rhsStr);
-        c.rhs = stod(rhsStr);
+    vector<Constraint> constraints;
+    cout << "\nEnter constraints one by one (e.g., '3x1 + x2 <= 10')." << endl;
+    cout << "Type 'done' or press Enter on an empty line to start solving:\n";
+    
+    while (true) {
+        cout << "> ";
+        string constLine;
+        getline(cin, constLine);
+        
+        string lowerConst = constLine;
+        transform(lowerConst.begin(), lowerConst.end(), lowerConst.begin(), ::tolower);
+        
+        // Trim whitespace from string
+        lowerConst.erase(0, lowerConst.find_first_not_of(" \t\r\n"));
+        if (lowerConst == "done" || lowerConst.empty()) break;
 
-        constraints.push_back(c);
+        regex opRegex(R"((<=|>=|<|>|=))");
+        smatch opMatch;
+        if (regex_search(constLine, opMatch, opRegex)) {
+            Constraint c;
+            c.op = opMatch[1].str();
+            
+            string lhs = constLine.substr(0, opMatch.position());
+            string rhsStr = constLine.substr(opMatch.position() + opMatch.length());
+            
+            c.rhs = stod(rhsStr);
+            parseExpression(lhs, c.coeffs);
+            constraints.push_back(c);
+        } else {
+            cout << "Invalid constraint format. Expected an operator (<=, >=, <, >, =).\n";
+        }
+    }
+
+    int numVars = maxVarIdx;
+    
+    // Ensure all vectors evaluate up to numVars
+    objFunc.resize(numVars, 0.0);
+    for (auto& c : constraints) {
+        c.coeffs.resize(numVars, 0.0);
     }
 
     cout << "\nStarting Big-M Simplex Solver..." << endl;
